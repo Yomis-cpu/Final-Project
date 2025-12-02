@@ -1,7 +1,7 @@
 # Vampire Suviver like Game
 
 ## Repository
-[<My GitHub respository>](https://github.com/Yomis-cpu/Final-Project.git)
+https://github.com/Yomis-cpu/Final-Project.git
 
 ## Description
 A Vampire Suviver like game. Player need survive servial wave of enemy. They will level up and unlock new ability to help them survive the wave. 
