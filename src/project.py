@@ -11,9 +11,38 @@ pygame.display.set_caption("Final Project")
 clock = pygame.time.Clock()
 FPS = 60
 
+font = pygame.font.SysFont(None, 24)
+big_font = pygame.font.SysFont(None, 64)
+
 ENEMY_SPEED = 2.0
 ENEMY_SIZE = 30
 ENEMY_SPAWN_INTERVAL = 500
+
+PLAYER_MAX_HEALTH = 100
+PLAYER_DAMAGE = 10
+PLAYER_HIT_COOLDOWN = 500
+
+class HealthBar:
+    def __init__(self, x, y, width, height, max_value, color=(0, 255, 0), bg_color=(80, 0, 0)):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.max_value = max_value
+        self.current_value = max_value
+
+        self.color = color
+        self.bg_color = bg_color
+
+    def update(self, new_value):
+        self.current_value = max(0, min(new_value, self.max_value))
+
+    def draw(self, surf):
+        pygame.draw.rect(surf, self.bg_color, (self.x, self.y, self.width, self.height))
+
+        ratio = self.current_value / self.max_value
+        pygame.draw.rect(surf, self.color, (self.x, self.y, int(self.width * ratio), self.height))
+
 
 class Bullet:
     def __init__(self, x, y, dx, dy, speed=10, radius=5):
@@ -45,8 +74,16 @@ class Player:
         self.speed = 5
 
         self.bullets = []  
+
         self.shoot_cooldown = 500   
         self.last_shot_time = 0
+
+        self.max_health = PLAYER_MAX_HEALTH
+        self.health = self.max_health
+        self.last_hit_time = 0
+        self.hit_cooldown = PLAYER_HIT_COOLDOWN
+
+        self.health_bar = HealthBar(10, 10, 200, 20, self.max_health)
 
     def handle_movement(self, keys):
         if keys[pygame.K_w]:
@@ -93,6 +130,18 @@ class Player:
             bullet.update()
 
         self.bullets = [b for b in self.bullets if b.alive]
+
+    def take_damage(self, amount):
+        now = pygame.time.get_ticks()
+        if now - self.last_hit_time < self.hit_cooldown:
+            return
+        
+        self.last_hit_time = now
+        self.health -= amount
+        if self.health < 0:
+            self.health = 0
+        
+        self.health_bar.update(self.health  )
 
     def draw(self, surf):
         pygame.draw.rect(surf, (50, 200, 255), (self.x, self.y, self.size, self.size))
@@ -148,20 +197,43 @@ def main():
 
     last_enemy_spawn = pygame.time.get_ticks()
     running = True
+    game_over = False
 
     while running:
         dt = clock.tick(FPS)
+
+        mouse_pressed = pygame.mouse.get_pressed()[0]
+        mouse_pos = pygame.mouse.get_pos()
 
         
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-
-        keys = pygame.key.get_pressed()
-        mouse_pressed = pygame.mouse.get_pressed()[0]
-        mouse_pos = pygame.mouse.get_pos()
-
+            
+            if game_over and event.type == pygame.MOUSEBUTTONDOWN:
+                if restart_button_rect.collidepoint(mouse_pos):
+                    player = Player()
+                    enemies = []
+                    last_enemy_spawn = pygame.time.get_ticks()
+                    game_over = False
         
+        if game_over:
+            screen.fill((10, 0, 0))
+
+            game_over_text = big_font.render("GAME OVER", True, (255, 50, 50))
+            screen.blit(game_over_text, (WIDTH // 2 - game_over_text.get_width() // 2, HEIGHT // 2 - 100))
+            
+            restart_button_rect = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2, 200, 60)
+            pygame.draw.rect(screen, (200, 200, 200), restart_button_rect, border_radius=10)
+
+            restart_text = font.render("Restart", True, (0, 0, 0))
+            screen.blit(restart_text, (restart_button_rect.centerx - restart_text.get_width() // 2, restart_button_rect.centery - restart_text.get_height() // 2,))
+
+            pygame.display.flip()
+            continue
+            
+        keys = pygame.key.get_pressed()
+  
         player.handle_movement(keys)
         player.shoot(mouse_pos, mouse_pressed)
         player.update_bullets()
@@ -198,12 +270,24 @@ def main():
         enemies = [e for e in enemies if e.alive]
         player.bullets = [b for b in player.bullets if b.alive]
 
+        player_rect = pygame.Rect(player.x, player.y, player.size, player.size)
+        for enemy in enemies:
+            enemy_rect = pygame.Rect(int(enemy.x), int(enemy.y), enemy.size, enemy.size)
+            if enemy_rect.colliderect(player_rect):
+                player.take_damage(PLAYER_DAMAGE)
 
+        
+        if player.health <= 0:
+            game_over = True
+            continue
+            
         screen.fill((30, 30, 40))
         player.draw(screen)
 
         for enemy in enemies:
             enemy.draw(screen)
+
+        player.health_bar.draw(screen)
 
         pygame.display.flip()
 
