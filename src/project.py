@@ -1,5 +1,6 @@
 import pygame
 import math
+import random
 
 pygame.init()
 
@@ -9,6 +10,10 @@ pygame.display.set_caption("Final Project")
 
 clock = pygame.time.Clock()
 FPS = 60
+
+ENEMY_SPEED = 2.0
+ENEMY_SIZE = 30
+ENEMY_SPAWN_INTERVAL = 1000
 
 class Bullet:
     def __init__(self, x, y, dx, dy, speed=10, radius=5):
@@ -24,7 +29,7 @@ class Bullet:
         self.x += self.dx * self.speed
         self.y += self.dy * self.speed
 
-        # Remove if outside screen
+        
         if self.x < -10 or self.x > WIDTH + 10 or self.y < -10 or self.y > HEIGHT + 10:
             self.alive = False
 
@@ -94,16 +99,59 @@ class Player:
         for b in self.bullets:
             b.draw(surf)
 
+class Enemy:
+    def __init__(self):
+        self.size = ENEMY_SIZE
+        self.speed = ENEMY_SPEED
+
+        
+        side = random.choice(["top", "bottom", "left", "right"])
+        if side == "top":
+            self.x = random.randint(0, WIDTH - self.size)
+            self.y = -self.size
+        elif side == "bottom":
+            self.x = random.randint(0, WIDTH - self.size)
+            self.y = HEIGHT + self.size
+        elif side == "left":
+            self.x = -self.size
+            self.y = random.randint(0, HEIGHT - self.size)
+        else:  # right
+            self.x = WIDTH + self.size
+            self.y = random.randint(0, HEIGHT - self.size)
+
+        self.alive = True
+
+    def update(self, player):
+        px = player.x + player.size / 2
+        py = player.y + player.size / 2
+        ex = self.x + self.size / 2
+        ey = self.y + self.size / 2
+
+        dx = px - ex
+        dy = py - ey
+        length = math.hypot(dx, dy)
+        if length != 0:
+            dx /= length
+            dy /= length
+
+        self.x += dx * self.speed
+        self.y += dy * self.speed
+
+    def draw(self, surf):
+        pygame.draw.rect(surf, (200, 60, 60), (int(self.x), int(self.y), self.size, self.size))
 
 
 def main():
     player = Player()
+    enemies = []
+
+    last_enemy_spawn = pygame.time.get_ticks()
     running = True
 
     while running:
         dt = clock.tick(FPS)
 
-        # Events
+        
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -112,14 +160,24 @@ def main():
         mouse_pressed = pygame.mouse.get_pressed()[0]
         mouse_pos = pygame.mouse.get_pos()
 
-        # --- Update ---
+        
         player.handle_movement(keys)
         player.shoot(mouse_pos, mouse_pressed)
         player.update_bullets()
 
-        # --- Draw ---
+        now = pygame.time.get_ticks()
+        if now - last_enemy_spawn > ENEMY_SPAWN_INTERVAL:
+            enemies.append(Enemy())
+            last_enemy_spawn = now
+
+        for enemy in enemies:
+            enemy.update(player)
+
         screen.fill((30, 30, 40))
         player.draw(screen)
+
+        for enemy in enemies:
+            enemy.draw(screen)
 
         pygame.display.flip()
 
