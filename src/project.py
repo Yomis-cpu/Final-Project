@@ -13,7 +13,7 @@ FPS = 60
 
 ENEMY_SPEED = 2.0
 ENEMY_SIZE = 30
-ENEMY_SPAWN_INTERVAL = 1000
+ENEMY_SPAWN_INTERVAL = 500
 
 class Bullet:
     def __init__(self, x, y, dx, dy, speed=10, radius=5):
@@ -103,6 +103,7 @@ class Enemy:
     def __init__(self):
         self.size = ENEMY_SIZE
         self.speed = ENEMY_SPEED
+        self.radius = self.size / 2
 
         
         side = random.choice(["top", "bottom", "left", "right"])
@@ -172,6 +173,31 @@ def main():
 
         for enemy in enemies:
             enemy.update(player)
+
+        for enemy in enemies:
+            if not enemy.alive:
+                continue
+
+            ex = enemy.x + enemy.size / 2
+            ey = enemy.y + enemy.size / 2
+
+            for bullet in player.bullets:
+                if not bullet.alive:
+                    continue
+                
+                bx = bullet.x
+                by = bullet.y
+
+                dist = math.hypot(ex - bx, ey - by)
+
+                if dist < enemy.radius + bullet.radius:
+                    enemy.alive = False
+                    bullet.alive = False
+                    break
+
+        enemies = [e for e in enemies if e.alive]
+        player.bullets = [b for b in player.bullets if b.alive]
+
 
         screen.fill((30, 30, 40))
         player.draw(screen)
