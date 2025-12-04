@@ -22,6 +22,9 @@ PLAYER_MAX_HEALTH = 100
 PLAYER_DAMAGE = 10
 PLAYER_HIT_COOLDOWN = 500
 
+EXP_PER_ENEMY = 10
+BASE_EXP_TO_NEXT = 100
+
 class HealthBar:
     def __init__(self, x, y, width, height, max_value, color=(0, 255, 0), bg_color=(80, 0, 0)):
         self.x = x
@@ -42,6 +45,59 @@ class HealthBar:
 
         ratio = self.current_value / self.max_value
         pygame.draw.rect(surf, self.color, (self.x, self.y, int(self.width * ratio), self.height))
+
+class ExpOrb:
+    def __init__(self, x, y, amount):
+        self.x = x
+        self.y = y
+        self.radius = 6
+        self.amount = amount
+        self.alive = True
+
+    def update(self, player):
+        px = player.x + player.size / 2
+        py = player.y + player.size / 2
+        dx = px - self.x
+        dy = py - self.y
+        dist = math.hypot(dx, dy)
+
+        if dist < 150 and dist != 0:
+            dx /= dist
+            dy /= dist
+            self.x += dx * 7
+            self.y += dy * 7
+
+    def draw(self, surf):
+        pygame.draw.circle(surf, (100, 255, 100), (int(self.x), int(self.y)), self.radius) 
+
+
+class ExpBar:
+    def __init__(self, x, y, width, height, color=(50, 120, 255), bg_color=(40, 40, 40)):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.color = color
+        self.bg_color = bg_color
+
+        self.current = 0
+        self.max = 1
+
+    def update(self, current_value, max_value):
+        self.current = current_value
+        self.max = max_value
+
+    def draw(self, surf):
+        
+        pygame.draw.rect(surf, self.bg_color, (self.x, self.y, self.width, self.height))
+
+        ratio = self.current / self.max if self.max > 0 else 0
+
+        pygame.draw.rect(
+            surf,
+            self.color,
+            (self.x, self.y, int(self.width * ratio), self.height)
+        )
 
 
 class Bullet:
@@ -84,6 +140,14 @@ class Player:
         self.hit_cooldown = PLAYER_HIT_COOLDOWN
 
         self.health_bar = HealthBar(10, 10, 200, 20, self.max_health)
+
+        self.level = 1
+        self.exp = 0
+        self.exp_to_next = BASE_EXP_TO_NEXT 
+
+        self.exp_bar = ExpBar(10, 40, 200, 10)
+        self.exp_bar.update(self.exp, self.exp_to_next)
+
 
     def handle_movement(self, keys):
         if keys[pygame.K_w]:
@@ -143,6 +207,24 @@ class Player:
         
         self.health_bar.update(self.health  )
 
+    def gain_exp(self, amount):
+        self.exp += amount
+        leveled = False
+
+        while self.exp >= self.exp_to_next:
+            self.exp -= self.exp_to_next
+            self.level += 1
+            leveled = True
+
+            self.exp_to_next = int(self.exp_to_next * 1.5)
+
+            self.health = self.max_health
+            self.health_bar.update(self.health)
+        
+        self.exp_bar.update(self.exp, self.exp_to_next)
+
+        return leveled
+
     def draw(self, surf):
         pygame.draw.rect(surf, (50, 200, 255), (self.x, self.y, self.size, self.size))
         for b in self.bullets:
@@ -194,6 +276,7 @@ class Enemy:
 def main():
     player = Player()
     enemies = []
+    exp_orbs = []
 
     last_enemy_spawn = pygame.time.get_ticks()
     running = True
@@ -246,6 +329,9 @@ def main():
         for enemy in enemies:
             enemy.update(player)
 
+        for orb in exp_orbs:
+            orb.update(player)
+
         for enemy in enemies:
             if not enemy.alive:
                 continue
@@ -265,16 +351,29 @@ def main():
                 if dist < enemy.radius + bullet.radius:
                     enemy.alive = False
                     bullet.alive = False
+                    exp_orbs.append(ExpOrb(ex, ey, EXP_PER_ENEMY))
                     break
 
-        enemies = [e for e in enemies if e.alive]
-        player.bullets = [b for b in player.bullets if b.alive]
 
         player_rect = pygame.Rect(player.x, player.y, player.size, player.size)
         for enemy in enemies:
             enemy_rect = pygame.Rect(int(enemy.x), int(enemy.y), enemy.size, enemy.size)
             if enemy_rect.colliderect(player_rect):
                 player.take_damage(PLAYER_DAMAGE)
+
+        px_center = player.x + player.size / 2
+        py_center = player.y + player.size / 2
+        for orb in exp_orbs:
+            if not orb.alive:
+                continue
+            dist = math.hypot(orb.x - px_center, orb.y - py_center)
+            if dist < orb.radius + player.size / 2:
+                orb.alive = False
+                player.gain_exp(orb.amount)
+
+        enemies = [e for e in enemies if e.alive]
+        player.bullets = [b for b in player.bullets if b.alive]
+        exp_orbs = [o for o in exp_orbs if o.alive]
 
         
         if player.health <= 0:
@@ -284,10 +383,17 @@ def main():
         screen.fill((30, 30, 40))
         player.draw(screen)
 
+        for orb in exp_orbs:
+            orb.draw(screen)
+
         for enemy in enemies:
             enemy.draw(screen)
 
         player.health_bar.draw(screen)
+        player.exp_bar.draw(screen)
+
+        lvl_text = font.render(f"LV: {player.level}", True, (255, 255, 255))
+        screen.blit(lvl_text, (10, 55))
 
         pygame.display.flip()
 
